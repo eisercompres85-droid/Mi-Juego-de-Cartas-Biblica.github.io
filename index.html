@@ -1,0 +1,2172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mi Juego de Cartas Bíblicas</title>
+
+<!-- JUEGO DE CARTAS BÍBLICAS
+     Para modificar: colores, tamaños y fuentes en la sección <style>.
+     Para cambiar las palabras de las cartas: edita cartas.json
+     (y el respaldo "datos-respaldo" al final del archivo). -->
+
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Playfair+Display:ital,wght@0,700;0,900;1,800&family=Poppins:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
+
+<style data-purpose="custom-fonts-and-animations">
+
+.font-script {
+  font-family: 'Pacifico', cursive;
+}
+
+.font-sans-custom {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Wave animations */
+
+@keyframes wave-move-1 {
+  0% {
+    transform: translateX(0) translateZ(0) scaleY(1);
+  }
+
+  50% {
+    transform: translateX(-25%) translateZ(0) scaleY(1.1);
+  }
+
+  100% {
+    transform: translateX(-50%) translateZ(0) scaleY(1);
+  }
+}
+
+@keyframes wave-move-2 {
+  0% {
+    transform: translateX(0) translateZ(0);
+  }
+
+  50% {
+    transform: translateX(-20%) translateZ(0);
+  }
+
+  100% {
+    transform: translateX(-40%) translateZ(0);
+  }
+}
+
+.animate-wave-1 {
+  animation: wave-move-1 8s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
+}
+
+.animate-wave-2 {
+  animation: wave-move-2 5s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
+}
+
+</style>
+
+<style>
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: 'Poppins', system-ui, -apple-system, Segoe UI, sans-serif;
+  background: #081420;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* VARIABLES QUE PUEDES CAMBIAR
+   ancho      -> ancho de la carta
+   arena*     -> tonos del fondo beige/arena
+   tinta*     -> tonos de los textos
+   oro        -> color dorado de acentos */
+
+:root {
+  --ancho: min(360px, 88vw);
+  --arena-claro: #f9f0dd;
+  --arena: #ecdbb6;
+  --tinta: #463c2e;
+  --tinta-suave: #8a7350;
+  --oro: #d9a441;
+}
+
+/* Fondo */
+
+.escenario {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      1200px 600px at 80% -10%,
+      rgba(52,120,150,.35),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 500px at -10% 110%,
+      rgba(217,164,65,.14),
+      transparent 55%
+    ),
+    linear-gradient(
+      160deg,
+      #12293d 0%,
+      #0b1c2e 50%,
+      #091522 100%
+    );
+}
+
+.escenario::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background-image:
+    radial-gradient(
+      rgba(255,255,255,.05) 1px,
+      transparent 1px
+    );
+
+  background-size: 26px 26px;
+  opacity: .4;
+  pointer-events: none;
+}
+
+/* Escenas */
+
+.escena {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: clamp(12px,3vh,22px);
+  padding: clamp(14px,4vw,28px);
+
+  overflow-y: auto;
+
+  opacity: 1;
+  visibility: hidden;
+
+  transform: perspective(1200px) rotateY(90deg);
+
+  transition:
+    transform .7s cubic-bezier(.35,.1,.2,1),
+    visibility .7s;
+
+  pointer-events: none;
+}
+
+.escena.activa {
+  opacity: 1;
+  visibility: visible;
+  transform: perspective(1200px) rotateY(0deg);
+  pointer-events: auto;
+}
+
+/* Al iniciar el juego, la carta gira 360 igual que al pasar a otra carta */
+#escenaJuego.activa .carta-juego {
+  animation: giro-carta-inicio .7s cubic-bezier(.35,.1,.2,1);
+}
+
+@keyframes giro-carta-inicio {
+  from {
+    transform: rotateY(540deg);
+  }
+
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+.pista {
+  color: rgba(255,255,255,.88);
+  font-size: clamp(.72rem,3vw,.85rem);
+  letter-spacing: .1em;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+
+/* Cartas */
+
+.carta-mazo {
+  position: absolute;
+  inset: 0;
+
+  border-radius: clamp(22px,5vw,34px);
+
+  background:
+    linear-gradient(
+      140deg,
+      #f7ecd6,
+      #e0cba4
+    );
+
+  border: 2px solid rgba(128,180,230,.35);
+}
+
+.c-mazo-3 {
+  transform: translate(10px,13px) rotate(4deg);
+  box-shadow: 0 18px 34px rgba(0,0,0,.35);
+}
+
+.c-mazo-2 {
+  transform: translate(6px,8px) rotate(2deg);
+  box-shadow: 0 20px 38px rgba(0,0,0,.38);
+}
+
+.c-mazo-1 {
+  transform: translate(2px,3px) rotate(1deg);
+  box-shadow: 0 22px 42px rgba(0,0,0,.4);
+}
+
+/* Carta inicial */
+
+.carta-portada {
+  position: absolute;
+  inset: 0;
+
+  overflow: hidden;
+
+  border-radius: clamp(22px,5vw,34px);
+
+  background:
+    radial-gradient(
+      120% 90% at 50% 0%,
+      rgba(255,255,255,.6),
+      transparent 60%
+    ),
+    linear-gradient(
+      150deg,
+      var(--arena-claro),
+      var(--arena) 55%,
+      #e5cfa6
+    );
+
+  border: 3px solid rgba(128,180,230,.5);
+
+  box-shadow:
+    0 24px 52px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    0 0 30px rgba(128,180,230,.2);
+
+  padding: clamp(14px,4vw,24px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carta-portada::after {
+  content: "";
+
+  position: absolute;
+  top: -40%;
+  left: -70%;
+
+  width: 50%;
+  height: 180%;
+
+  transform: rotate(18deg);
+
+  background:
+    linear-gradient(
+      100deg,
+      transparent,
+      rgba(255,255,255,.5),
+      transparent
+    );
+
+  animation: destello 4.5s ease-in-out infinite;
+}
+
+@keyframes destello {
+  0%,60%,100% {
+    left: -70%;
+  }
+
+  28% {
+    left: 130%;
+  }
+}
+
+.pip {
+  position: absolute;
+
+  width: 26px;
+  height: 26px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--oro);
+  font-size: .95rem;
+  opacity: .85;
+}
+
+.pip.tl {
+  top: 8px;
+  left: 10px;
+}
+
+.pip.br {
+  bottom: 8px;
+  right: 10px;
+  transform: rotate(180deg);
+}
+
+.marco-portada {
+  width: 100%;
+  height: 100%;
+
+  border: 2px dashed rgba(128,180,230,.5);
+  border-radius: 16px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: clamp(6px,1.8vh,12px);
+
+  padding: clamp(14px,4vw,22px) 10px;
+
+  text-align: center;
+}
+
+.emblema {
+  width: clamp(34px,10vw,46px);
+  height: clamp(34px,10vw,46px);
+
+  border-radius: 50%;
+
+  border: 2px solid rgba(217,164,65,.7);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--oro);
+  font-size: clamp(1.1rem,4vw,1.4rem);
+
+  box-shadow:
+    0 0 0 4px rgba(217,164,65,.12),
+    0 4px 10px rgba(0,0,0,.15);
+
+  margin-bottom: 2px;
+}
+
+.linea1 {
+  font-family: 'Playfair Display',Georgia,serif;
+  font-weight: 800;
+  font-style: italic;
+
+  font-size: clamp(1rem,4.6vw,1.35rem);
+  letter-spacing: .04em;
+
+  color: #7a5d3a;
+}
+
+.linea2 {
+  font-family: 'Playfair Display',Georgia,serif;
+  font-weight: 900;
+
+  font-size: clamp(1.5rem,7.6vw,2.3rem);
+  letter-spacing: .02em;
+
+  color: #23466e;
+  line-height: 1.15;
+
+  text-shadow: 0 2px 0 rgba(255,255,255,.5);
+}
+
+.linea3 {
+  font-family: 'Playfair Display',Georgia,serif;
+  font-weight: 700;
+
+  font-size: clamp(.6rem,2.9vw,.82rem);
+  letter-spacing: .3em;
+
+  color: var(--tinta-suave);
+
+  text-transform: uppercase;
+}
+
+.ornamento {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  color: var(--oro);
+  width: 88%;
+}
+
+.ornamento span {
+  flex: 1;
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      var(--oro),
+      transparent
+    );
+}
+
+.ornamento i {
+  font-style: normal;
+  font-size: .78rem;
+}
+
+/* Carta SANTO DOMINGO RD */
+
+.carta-base {
+  position: relative;
+
+  width: var(--ancho);
+  aspect-ratio: 340/580;
+
+  cursor: pointer;
+  overflow: hidden;
+
+  border-radius: clamp(22px,5vw,34px);
+
+  background: #f4d0a2;
+
+  border: 3px solid rgba(128,180,230,.5);
+
+  box-shadow:
+    0 20px 44px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    0 0 22px rgba(128,180,230,.18);
+
+  display: flex;
+  flex-direction: column;
+
+  touch-action: manipulation;
+
+  animation: carga-giro .7s cubic-bezier(.35,.1,.2,1);
+}
+
+@keyframes carga-giro {
+  from {
+    transform: perspective(1200px) rotateY(360deg);
+  }
+
+  to {
+    transform: perspective(1200px) rotateY(0deg);
+  }
+}
+
+/* La carta inicial queda en la misma posición que la carta de juego */
+#escenaBase {
+  justify-content: flex-start;
+}
+
+#escenaBase.activa {
+  padding-top: clamp(18px,5vh,36px);
+}
+
+.carta-base.salida {
+  animation: none;
+}
+
+.cala-sd {
+  width: clamp(112px,32vw,150px);
+  height: auto;
+
+  margin: clamp(0px,1vh,8px) 0;
+
+  filter:
+    drop-shadow(
+      0 8px 12px rgba(0,0,0,.3)
+    );
+}
+
+/* Juego */
+
+.escena-juego {
+  justify-content: flex-start;
+}
+
+.escena-juego.activa {
+  padding-top: clamp(16px,4vh,28px);
+}
+
+.cabecera-juego {
+  width: var(--ancho);
+
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.titulo-juego {
+  font-family: 'Poppins',sans-serif;
+  font-weight: 900;
+
+  font-size: clamp(1.05rem,4.6vw,1.35rem);
+
+  letter-spacing: .04em;
+
+  color: #fff;
+
+  text-shadow:
+    0 2px 6px rgba(0,0,0,.5);
+}
+
+.titulo-juego em {
+  font-style: italic;
+  color: var(--oro);
+}
+
+.puntaje {
+  font-size: clamp(.78rem,3.2vw,.92rem);
+
+  color: rgba(255,255,255,.9);
+
+  background: rgba(255,255,255,.08);
+
+  border: 1px solid rgba(255,255,255,.15);
+
+  padding: 5px 12px;
+
+  border-radius: 20px;
+
+  white-space: nowrap;
+}
+
+.puntaje b {
+  color: var(--oro);
+}
+
+/* Instrucciones */
+
+.instrucciones {
+  width: var(--ancho);
+  margin-top: 2px;
+}
+
+.instrucciones summary {
+  list-style: none;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+
+  gap: 8px;
+
+  background: rgba(255,255,255,.08);
+
+  border: 1px solid rgba(255,255,255,.18);
+
+  color: #fff;
+
+  border-radius: 25px;
+
+  padding: 7px 15px;
+
+  font-size: .74rem;
+  font-weight: 600;
+
+  transition:
+    background .3s ease;
+
+  font-family: inherit;
+}
+
+.instrucciones summary:hover {
+  background: rgba(255,255,255,.15);
+}
+
+.instrucciones summary::after {
+  content: "▼";
+
+  font-size: .58rem;
+
+  transition:
+    transform .3s ease;
+}
+
+.instrucciones[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.instrucciones-contenido {
+  margin-top: 8px;
+
+  background: rgba(8,20,32,.7);
+
+  border: 1px solid rgba(255,255,255,.2);
+
+  border-radius: 14px;
+
+  padding: 13px 15px;
+
+  color: rgba(255,255,255,.94);
+
+  font-size: .8rem;
+  line-height: 1.75;
+}
+
+.instrucciones-contenido strong {
+  color: var(--oro);
+}
+
+/* Carta de juego */
+
+.contenedor-juego {
+  width: var(--ancho);
+
+  aspect-ratio: 340/580;
+
+  perspective: 1200px;
+
+  margin-top: clamp(2px,1vh,8px);
+}
+
+.carta-juego {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+
+  cursor: pointer;
+
+  touch-action: manipulation;
+
+  transform-style: preserve-3d;
+
+  transition:
+    transform .7s cubic-bezier(.35,.1,.2,1);
+}
+
+.cara {
+  position: absolute;
+  inset: 0;
+
+  overflow: hidden;
+
+  border-radius: clamp(22px,5vw,34px);
+
+  background:
+    linear-gradient(
+      150deg,
+      var(--arena-claro),
+      var(--arena) 60%,
+      #e5cfa6
+    );
+
+  border: 3px solid rgba(128,180,230,.5);
+
+  box-shadow:
+    0 20px 44px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    0 0 22px rgba(128,180,230,.18);
+
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Cara frontal */
+
+.cara-frente {
+  display: flex;
+  flex-direction: column;
+
+  padding: clamp(16px,4.4vw,28px);
+}
+
+.numero-carta {
+  position: absolute;
+
+  top: clamp(12px,3vw,18px);
+  left: clamp(14px,3.6vw,24px);
+
+  font-size: clamp(.6rem,2.4vw,.8rem);
+
+  color: var(--tinta-suave);
+
+  font-weight: 600;
+
+  letter-spacing: .06em;
+
+  background: rgba(255,255,255,.45);
+
+  border: 1px solid rgba(128,180,230,.3);
+
+  border-radius: 20px;
+
+  padding: 3px 10px;
+}
+
+.palabra {
+  margin-top: clamp(34px,9vw,66px);
+
+  font-family: 'Poppins',sans-serif;
+
+  font-weight: 900;
+  font-style: italic;
+font-size:
+    clamp(1.4rem,7.6vw,2.4rem);
+
+  letter-spacing: .02em;
+
+  /* COLOR DE LA PALABRA A ADIVINAR */
+  color: #23466e;
+
+  text-align: center;
+
+  line-height: 1.2;
+
+  word-break: break-word;
+
+  min-height: clamp(56px,15vw,90px);
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: clamp(6px,1.8vw,14px) 4px;
+
+  width: 100%;
+
+  text-shadow:
+    0 2px 0 rgba(255,255,255,.45);
+}
+
+.burbuja-palabra {
+  width: 100%;
+
+  border-bottom:
+    2px dashed rgba(128,180,230,.45);
+
+  padding-bottom:
+    clamp(6px,1.6vw,10px);
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: clamp(2px,.6vh,6px);
+
+  position: relative;
+
+  z-index: 10;
+}
+
+.minilabel {
+  font-size: clamp(.5rem,2.1vw,.68rem);
+
+  color: var(--tinta-suave);
+
+  letter-spacing: .28em;
+
+  text-transform: uppercase;
+
+  font-weight: 600;
+}
+
+.seccion-palabras {
+  flex: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  gap: clamp(7px,1.8vw,12px);
+
+  width: 100%;
+
+  margin-top:
+    clamp(10px,2.4vw,18px);
+
+  position: relative;
+
+  z-index: 10;
+}
+
+.titulo-lista {
+  font-size: clamp(.52rem,2.2vw,.72rem);
+
+  color: var(--tinta-suave);
+
+  text-transform: uppercase;
+
+  letter-spacing: .3em;
+
+  text-align: center;
+
+  margin-bottom: 2px;
+
+  font-weight: 600;
+}
+
+.palabra-prohibida {
+  position: relative;
+
+  background:
+    rgba(255,248,238,.82);
+
+  border:
+    1px solid rgba(192,57,43,.30);
+
+  border-radius: 12px;
+
+  padding:
+    clamp(7px,1.8vw,12px)
+    clamp(30px,7vw,40px);
+
+  /* COLOR DE LAS PALABRAS PROHIBIDAS */
+  color: #a83226;
+
+  font-size:
+    clamp(.82rem,3.6vw,1.08rem);
+
+  font-weight: 600;
+
+  text-align: center;
+
+  word-break: break-word;
+
+  box-shadow:
+    0 2px 5px
+    rgba(0,0,0,.08);
+}
+
+.palabra-prohibida::before {
+  content: "×";
+
+  position: absolute;
+
+  left: clamp(9px,2.4vw,14px);
+
+  top: 50%;
+
+  transform: translateY(-50%);
+
+  color: rgba(231,76,60,.5);
+
+  font-size: clamp(.85rem,3.2vw,1.05rem);
+
+  font-weight: 700;
+}
+
+.indicador-ayuda {
+  position: absolute;
+
+  bottom: clamp(10px,2.4vw,18px);
+  right: clamp(14px,3.6vw,22px);
+
+  font-size: .68rem;
+
+  color: var(--tinta-suave);
+
+  opacity: .85;
+
+  letter-spacing: .04em;
+}
+
+/* Dorso */
+
+.cara-dorso {
+  transform: rotateY(180deg);
+
+  background: transparent;
+
+  border: 3px solid rgba(128,180,230,.5);
+
+  box-shadow:
+    0 20px 44px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    0 0 22px rgba(128,180,230,.18);
+}
+
+/* Progreso */
+
+.progreso {
+  width: var(--ancho);
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 8px;
+
+  margin-top:
+    clamp(2px,1vh,8px);
+
+  flex-wrap: wrap;
+}
+
+.cartas-restantes {
+  color: rgba(255,255,255,.9);
+
+  font-size:
+    clamp(.75rem,3.2vw,.88rem);
+}
+
+.cartas-restantes b {
+  color: var(--oro);
+}
+
+.botones {
+  display: flex;
+  gap: 8px;
+}
+
+.botones button {
+  font-family: inherit;
+
+  font-weight: 600;
+
+  background:
+    rgba(255,255,255,.1);
+
+  border:
+    1px solid rgba(255,255,255,.22);
+
+  color: #fff;
+
+  border-radius: 25px;
+
+  padding: 8px 15px;
+
+  font-size: .72rem;
+
+  cursor: pointer;
+
+  letter-spacing: .04em;
+
+  transition:
+    background .3s ease,
+    transform .15s ease;
+}
+
+.botones button:hover {
+  background:
+    rgba(255,255,255,.18);
+
+  transform:
+    translateY(-1px);
+}
+
+.botones button:active {
+  transform:
+    translateY(0) scale(.97);
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="escenario">
+
+  <!-- PANTALLA INICIAL -->
+
+  <section id="escenaBase" class="escena activa">
+
+    <div class="carta-base" id="cartaBase">
+
+      <!-- OceanSection -->
+
+      <div class="relative h-[55%] w-full bg-[#3b9ab9] overflow-hidden">
+
+        <div class="absolute inset-0 bg-[#2b7e9b]"></div>
+
+        <div class="absolute inset-x-0 top-[15%] h-[40%] opacity-70 animate-wave-1">
+
+          <svg
+            class="absolute w-[200%] h-full"
+            preserveAspectRatio="none"
+            viewBox="0 0 1200 120">
+
+            <path
+              d="M0,0 C150,90 350,-40 500,40 C650,120 900,10 1200,50 L1200,120 L0,120 Z"
+              fill="#3b9ab9">
+            </path>
+
+          </svg>
+
+        </div>
+
+        <div
+          class="absolute inset-x-0 top-[35%] h-[45%] opacity-85 animate-wave-2"
+          style="animation-delay: -2s;">
+
+          <svg
+            class="absolute w-[200%] h-full"
+            preserveAspectRatio="none"
+            viewBox="0 0 1200 120">
+
+            <path
+              d="M0,30 C200,100 400,0 600,60 C800,120 1000,10 1200,40 L1200,120 L0,120 Z"
+              fill="#60b5d1">
+            </path>
+
+          </svg>
+
+        </div>
+
+        <div
+          class="absolute inset-x-0 top-[55%] h-[35%] opacity-90 animate-wave-1"
+          style="animation-delay: -4s;">
+
+          <svg
+            class="absolute w-[200%] h-full"
+            preserveAspectRatio="none"
+            viewBox="0 0 1200 120">
+
+            <path
+              d="M0,20 C180,80 380,10 600,50 C820,90 1000,20 1200,30 L1200,120 L0,120 Z"
+              fill="#88cce3">
+            </path>
+
+          </svg>
+
+        </div>
+
+        <div
+          class="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-b from-transparent via-[#ffffff]/80 to-[#f2e1c2] filter drop-shadow-md">
+        </div>
+
+      </div>
+
+      <!-- BeachSection -->
+
+      <div
+        class="relative h-[45%] w-full bg-[#f2d8b1] flex flex-col justify-end p-6">
+
+        <div
+          class="absolute inset-0 opacity-15 bg-[radial-gradient(#8c6439_1px,transparent_1px)] [background-size:12px_12px]">
+        </div>
+
+        <div
+          class="absolute bottom-8 left-8 w-10 h-10 text-[#c83333] transform -rotate-12 filter drop-shadow-sm">
+
+          <svg fill="currentColor" viewBox="0 0 24 24">
+
+            <path
+              d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.3 7.1-6.1-4.4-6.1 4.4 2.3-7.1-6.2-4.5h7.6z">
+            </path>
+
+          </svg>
+
+        </div>
+
+      </div>
+
+      <!-- TypographyAndOverlays -->
+
+      <div
+        class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-4">
+
+        <div
+          class="relative w-full max-w-[320px] flex flex-col items-center justify-center">
+
+          <div
+            class="flex items-end justify-center w-full space-x-2 relative z-20">
+
+            <h1
+              class="font-sans-custom font-black text-[4rem] sm:text-[4.6rem] leading-none tracking-tight text-[#177a8c] filter drop-shadow-[0_2px_2px_rgba(255,255,255,0.4)]">
+
+              SANTO
+
+            </h1>
+
+            <span
+              class="font-script text-[2.5rem] sm:text-[2.8rem] text-[#4b2d73] pb-1 transform rotate-6 filter drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
+
+              RD
+
+            </span>
+
+          </div>
+
+          <div
+            class="absolute top-[-25px] left-[165px] w-20 sm:w-24 h-20 sm:h-24 z-30 transform rotate-12 filter drop-shadow-md">
+
+            <svg
+              class="w-full h-full"
+              viewBox="0 0 100 100">
+
+              <path
+                d="M50 50 C40 20 60 5 75 15 C90 25 85 45 60 50 Z"
+                fill="#e83e8c">
+              </path>
+
+              <path
+                d="M50 50 C75 35 95 50 90 70 C85 90 65 80 55 60 Z"
+                fill="#f06292">
+              </path>
+
+              <path
+                d="M50 50 C65 75 50 95 35 90 C20 85 30 65 45 55 Z"
+                fill="#e83e8c">
+              </path>
+
+              <path
+                d="M50 50 C25 65 5 50 10 30 C15 10 35 20 45 40 Z"
+                fill="#f06292">
+              </path>
+
+              <path
+                d="M50 50 C30 35 15 25 25 10 C35 -5 50 15 50 30 Z"
+                fill="#ff80ab">
+              </path>
+
+              <path
+                d="M50 50 L75 35"
+                stroke="#fbc02d"
+                stroke-linecap="round"
+                stroke-width="3">
+              </path>
+
+              <circle
+                cx="75"
+                cy="35"
+                fill="#f57f17"
+                r="3.5">
+              </circle>
+
+              <circle
+                cx="79"
+                cy="32"
+                fill="#f57f17"
+                r="2">
+              </circle>
+
+              <circle
+                cx="73"
+                cy="30"
+                fill="#f57f17"
+                r="2">
+              </circle>
+
+            </svg>
+
+          </div>
+
+          <div
+            class="relative w-full text-center z-10 -mt-2 sm:-mt-3">
+
+            <h2
+              class="font-sans-custom font-black text-[3.5rem] sm:text-[4rem] tracking-wider uppercase leading-none text-[#2b7e9b] filter drop-shadow-sm">
+
+              DOMINGO
+
+            </h2>
+<h2>  
+..................................................
+
+</h2>
+
+            <h2
+              class="font-sans-custom font-black text-[.5rem] sm:text-[1rem] tracking-wider uppercase leading-none text-[#2b7e9b] filter drop-shadow-sm">
+
+              Mi juego de 
+
+            </h2>
+            <h2
+              class="font-sans-custom font-black text-[.1rem] sm:text-[2rem] tracking-wider uppercase leading-none text-[#2b7e9b] filter drop-shadow-sm">
+
+              Cartas Biblicas
+
+            </h2>
+
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TEXTO BAJO LA CARTA INICIAL (puedes cambiarlo) -->
+    <p class="pista">
+      Toca la carta para comenzar a jugar
+    </p>
+
+
+    <!-- CÓMO SE JUEGA: aparece junto a la carta inicial.
+         Cerrado por defecto: toca el botón para verla. -->
+    <details class="instrucciones">
+
+      <summary>
+        ¿Cómo se juega?
+      </summary>
+
+      <div class="instrucciones-contenido">
+
+        La meta es tener la mayor cantidad de palabras o personajes acertados.
+        <strong>Palabras prohibidas</strong> son aquellas que el que formule 
+        la oración o de pistas no deje mencionar. <strong>Para determinar si una palabra 
+        fue acertada</strong> la persona o el grupo al que sele haga la pregunta o se le 
+        de pista debe mencionar la palabra en la cabecera de la carta    
+        <br>
+      </div>
+
+    </details>
+
+  </section>
+
+
+  <!-- JUEGO -->
+
+  <section
+    id="escenaJuego"
+    class="escena escena-juego">
+
+    <div class="contenedor-juego">
+
+      <div
+        class="carta-juego"
+        id="carta">
+
+        <!-- Cara frontal -->
+
+        <div class="cara cara-frente">
+
+          <!-- DISEÑO TROPICAL (IGUAL QUE EL DORSO) -->
+
+          <div class="absolute inset-0 pointer-events-none">
+
+            <div class="relative h-[55%] w-full bg-[#3b9ab9] overflow-hidden">
+
+              <div class="absolute inset-0 bg-[#2b7e9b]"></div>
+
+              <div class="absolute inset-x-0 top-[15%] h-[40%] opacity-70 animate-wave-1">
+
+                <svg
+                  class="absolute w-[200%] h-full"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 1200 120">
+
+                  <path
+                    d="M0,0 C150,90 350,-40 500,40 C650,120 900,10 1200,50 L1200,120 L0,120 Z"
+                    fill="#3b9ab9">
+                  </path>
+
+                </svg>
+
+              </div>
+
+              <div
+                class="absolute inset-x-0 top-[35%] h-[45%] opacity-85 animate-wave-2"
+                style="animation-delay: -2s;">
+
+                <svg
+                  class="absolute w-[200%] h-full"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 1200 120">
+
+                  <path
+                    d="M0,30 C200,100 400,0 600,60 C800,120 1000,10 1200,40 L1200,120 L0,120 Z"
+                    fill="#60b5d1">
+                  </path>
+
+                </svg>
+
+              </div>
+
+              <div
+                class="absolute inset-x-0 top-[55%] h-[35%] opacity-90 animate-wave-1"
+                style="animation-delay: -4s;">
+
+                <svg
+                  class="absolute w-[200%] h-full"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 1200 120">
+
+                  <path
+                    d="M0,20 C180,80 380,10 600,50 C820,90 1000,20 1200,30 L1200,120 L0,120 Z"
+                    fill="#88cce3">
+                  </path>
+
+                </svg>
+
+              </div>
+
+              <div
+                class="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-b from-transparent via-[#ffffff]/80 to-[#f2e1c2] filter drop-shadow-md">
+              </div>
+
+            </div>
+
+            <div
+              class="relative h-[45%] w-full bg-[#f2d8b1] flex flex-col justify-end p-6">
+
+              <div
+                class="absolute inset-0 opacity-15 bg-[radial-gradient(#8c6439_1px,transparent_1px)] [background-size:12px_12px]">
+              </div>
+
+              <div
+                class="absolute bottom-8 left-8 w-10 h-10 text-[#c83333] transform -rotate-12 filter drop-shadow-sm">
+
+                <svg
+                  fill="currentColor"
+                  viewBox="0 0 24 24">
+
+                  <path
+                    d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.3 7.1-6.1-4.4-6.1 4.4 2.3-7.1-6.2-4.5h7.6z">
+                  </path>
+
+                </svg>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- CONTENIDO DEL FRENTE:
+               Textos que se ven sobre el fondo tropical.
+               id="palabra"     = palabra a adivinar
+               id="palabra1..4" = palabras que no se pueden decir -->
+
+          <span
+            class="numero-carta"
+            id="numeroCarta">
+
+            Carta #-
+
+          </span>
+
+          <div class="burbuja-palabra">
+
+            <span class="minilabel">
+              
+            </span>
+
+            <div
+              class="palabra"
+              id="palabra">
+
+              ---
+
+            </div>
+
+          </div>
+
+          <div class="seccion-palabras">
+
+            <span class="titulo-lista">
+              No puedes decir:
+            </span>
+
+            <div
+              class="palabra-prohibida"
+              id="palabra1">
+            </div>
+
+            <div
+              class="palabra-prohibida"
+              id="palabra2">
+            </div>
+
+            <div
+              class="palabra-prohibida"
+              id="palabra3">
+            </div>
+
+            <div
+              class="palabra-prohibida"
+              id="palabra4">
+            </div>
+
+          </div>
+
+          <span class="indicador-ayuda">
+            Toca para pasar
+          </span>
+
+        </div>
+
+
+        <!-- Cara trasera -->
+
+        <div class="cara cara-dorso">
+
+          <div
+            class="relative h-[55%] w-full bg-[#3b9ab9] overflow-hidden">
+
+            <div class="absolute inset-0 bg-[#2b7e9b]"></div>
+
+            <div
+              class="absolute inset-x-0 top-[15%] h-[40%] opacity-70 animate-wave-1">
+
+              <svg
+                class="absolute w-[200%] h-full"
+                preserveAspectRatio="none"
+                viewBox="0 0 1200 120">
+
+                <path
+                  d="M0,0 C150,90 350,-40 500,40 C650,120 900,10 1200,50 L1200,120 L0,120 Z"
+                  fill="#3b9ab9">
+                </path>
+
+              </svg>
+
+            </div>
+
+            <div
+              class="absolute inset-x-0 top-[35%] h-[45%] opacity-85 animate-wave-2"
+              style="animation-delay: -2s;">
+
+              <svg
+                class="absolute w-[200%] h-full"
+                preserveAspectRatio="none"
+                viewBox="0 0 1200 120">
+
+                <path
+                  d="M0,30 C200,100 400,0 600,60 C800,120 1000,10 1200,40 L1200,120 L0,120 Z"
+                  fill="#60b5d1">
+                </path>
+
+              </svg>
+
+            </div>
+
+            <div
+              class="absolute inset-x-0 top-[55%] h-[35%] opacity-90 animate-wave-1"
+              style="animation-delay: -4s;">
+
+              <svg
+                class="absolute w-[200%] h-full"
+                preserveAspectRatio="none"
+                viewBox="0 0 1200 120">
+
+                <path
+                  d="M0,20 C180,80 380,10 600,50 C820,90 1000,20 1200,30 L1200,120 L0,120 Z"
+                  fill="#88cce3">
+                </path>
+
+              </svg>
+
+            </div>
+
+            <div
+              class="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-b from-transparent via-[#ffffff]/80 to-[#f2e1c2] filter drop-shadow-md">
+            </div>
+
+          </div>
+
+
+          <div
+            class="relative h-[45%] w-full bg-[#f2d8b1] flex flex-col justify-end p-6">
+
+            <div
+              class="absolute inset-0 opacity-15 bg-[radial-gradient(#8c6439_1px,transparent_1px)] [background-size:12px_12px]">
+            </div>
+
+            <div
+              class="absolute bottom-8 left-8 w-10 h-10 text-[#c83333] transform -rotate-12 filter drop-shadow-sm">
+
+              <svg
+                fill="currentColor"
+                viewBox="0 0 24 24">
+
+                <path
+                  d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.3 7.1-6.1-4.4-6.1 4.4 2.3-7.1-6.2-4.5h7.6z">
+                </path>
+
+              </svg>
+
+            </div>
+
+          </div>
+
+
+          <div
+            class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-4">
+
+            <div
+              class="relative w-full max-w-[320px] flex flex-col items-center justify-center">
+
+              <div
+                class="flex items-end justify-center w-full space-x-2 relative z-20">
+
+                <h1
+                  class="font-sans-custom font-black text-[4rem] sm:text-[4.6rem] leading-none tracking-tight text-[#177a8c] filter drop-shadow-[0_2px_2px_rgba(255,255,255,0.4)]">
+
+                  SANTO
+
+                </h1>
+
+                <span
+                  class="font-script text-[2.5rem] sm:text-[2.8rem] text-[#4b2d73] pb-1 transform rotate-6 filter drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
+
+                  RD
+
+                </span>
+
+              </div>
+
+
+              <div
+                class="absolute top-[-25px] left-[165px] w-20 sm:w-24 h-20 sm:h-24 z-30 transform rotate-12 filter drop-shadow-md">
+
+                <svg
+                  class="w-full h-full"
+                  viewBox="0 0 100 100">
+
+                  <path
+                    d="M50 50 C40 20 60 5 75 15 C90 25 85 45 60 50 Z"
+                    fill="#e83e8c">
+                  </path>
+
+                  <path
+                    d="M50 50 C75 35 95 50 90 70 C85 90 65 80 55 60 Z"
+                    fill="#f06292">
+                  </path>
+
+                  <path
+                    d="M50 50 C65 75 50 95 35 90 C20 85 30 65 45 55 Z"
+                    fill="#e83e8c">
+                  </path>
+
+                  <path
+                    d="M50 50 C25 65 5 50 10 30 C15 10 35 20 45 40 Z"
+                    fill="#f06292">
+                  </path>
+
+                  <path
+                    d="M50 50 C30 35 15 25 25 10 C35 -5 50 15 50 30 Z"
+                    fill="#ff80ab">
+                  </path>
+
+                  <path
+                    d="M50 50 L75 35"
+                    stroke="#fbc02d"
+                    stroke-linecap="round"
+                    stroke-width="3">
+                  </path>
+
+                  <circle
+                    cx="75"
+                    cy="35"
+                    fill="#f57f17"
+                    r="3.5">
+                  </circle>
+
+                  <circle
+                    cx="79"
+                    cy="32"
+                    fill="#f57f17"
+                    r="2">
+                  </circle>
+
+                  <circle
+                    cx="73"
+                    cy="30"
+                    fill="#f57f17"
+                    r="2">
+                  </circle>
+
+                </svg>
+
+              </div>
+
+
+              <div
+                class="relative w-full text-center z-10 -mt-2 sm:-mt-3">
+
+                <h2
+                  class="font-sans-custom font-black text-[3.5rem] sm:text-[4rem] tracking-wider uppercase leading-none text-[#2b7e9b] filter drop-shadow-sm">
+
+                  DOMINGO
+
+                </h2>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="progreso">
+
+      <span class="cartas-restantes">
+
+        Cartas:
+        <b id="ronda">0</b> /
+        <b id="total">50</b>
+
+      </span>
+
+      <div class="botones">
+
+        <button id="btnReset">
+          Nueva ronda
+        </button>
+
+        <button id="btnInicio">
+          Volver al inicio
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+</div>
+
+
+<!-- Respaldo de cartas -->
+
+<!-- RESPALDO DE CARTAS:
+     Las 50 cartas (palabra + palabras que no se pueden decir).
+     Si quieres cambiar las cartas, edita también cartas.json -->
+
+<script
+  id="datos-respaldo"
+  type="application/json">
+[
+  {"id":1,"palabra":"Arca de Noé","noDecir":["Noé","Diluvio","Animales","Madera"]}, 
+  {"id":2,"palabra":"Moisés","noDecir":["Faraón","Mar Rojo","Tablas","Egipto"]}, 
+  {"id":3,"palabra":"David","noDecir":["Goliat","Rey","Salmos","Honda"]}, 
+  {"id":4,"palabra":"Goliat","noDecir":["Filisteo","Gigante","David","Espada"]}, 
+  {"id":5,"palabra":"Belén","noDecir":["Jesús","Judá","David","Ciudad"]}, 
+  {"id":6,"palabra":"Jerusalén","noDecir":["Ciudad","Templo","Israel","Monte"]}, 
+  {"id":7,"palabra":"María","noDecir":["Madre","Virgen","José","Jesús"]}, 
+  {"id":8,"palabra":"José","noDecir":["Carpintero","María","Jesús","Nazaret"]}, 
+  {"id":9,"palabra":"Jesús","noDecir":["Cristo","Salvador","Hijo de Dios","Nazaret"]}, 
+  {"id":10,"palabra":"Nazaret","noDecir":["Galilea","Jesús","Pueblo","Carpintero"]}, 
+  {"id":11,"palabra":"Galilea","noDecir":["Mar","Jesús","Región","Pesca"]}, 
+  {"id":12,"palabra":"Río Jordán","noDecir":["Río","Bautismo","Jesús","Agua"]}, 
+  {"id":13,"palabra":"Bautismo","noDecir":["Agua","Juan el Bautista","Dedicación","Inmersión"]}, 
+  {"id":14,"palabra":"Juan el Bautista","noDecir":["Desierto","Langostas","Bautizar","Precursor"]}, 
+  {"id":15,"palabra":"Pablo","noDecir":["Saulo","Apóstol","Cartas","Damasco"]}, 
+  {"id":16,"palabra":"Judas Iscariote","noDecir":["Traición","Treinta monedas","Beso","Apóstol"]}, 
+  {"id":17,"palabra":"Adán","noDecir":["Eva","Paraíso","Pecado","Costilla"]}, 
+  {"id":18,"palabra":"Eva","noDecir":["Adán","Serpiente","Tentación","Mujer"]}, 
+  {"id":19,"palabra":"Serpiente","noDecir":["Engaño","Edén","Tentar","Astucia"]}, 
+  {"id":20,"palabra":"Edén","noDecir":["Jardín","Paraíso","Adán","Eva"]}, 
+  {"id":21,"palabra":"Pan","noDecir":["Milagro","Multiplicar","Alimento","Cena del Señor"]}, 
+  {"id":22,"palabra":"Pescado","noDecir":["Milagro","Comida","Mar","Multiplicación"]}, 
+  {"id":23,"palabra":"Tierra Prometida","noDecir":["Canaán","Moisés","Josué","Leche y miel"]}, 
+  {"id":24,"palabra":"Josué","noDecir":["Jericó","Murallas","Sucesor","Guerra"]}, 
+  {"id":25,"palabra":"Jericó","noDecir":["Murallas","Trompetas","Josué","Caída"]}, 
+  {"id":26,"palabra":"Samuel","noDecir":["Profeta","Ana","Sacerdote","Ungir"]}, 
+  {"id":27,"palabra":"Sansón","noDecir":["Fuerza","Cabello","Filisteos","Dalila"]}, 
+  {"id":28,"palabra":"Dalila","noDecir":["Traición","Sansón","Cabello","Filisteos"]}, 
+  {"id":29,"palabra":"Rut","noDecir":["Espigas","Boaz","Noemí","Moab"]},   
+  {"id":30,"palabra":"Ester","noDecir":["Reina","Persia","Mardoqueo","Ayuno"]}, 
+  {"id":31,"palabra":"Daniel","noDecir":["Leones","Foso","Babilonia","Fiel"]}, 
+  {"id":32,"palabra":"Foso de los leones","noDecir":["Daniel","Leones","Milagro","Babilonia"]}, 
+  {"id":33,"palabra":"Babilonia","noDecir":["Imperio","Nabucodonosor","Exilio","Reino"]}, 
+  {"id":34,"palabra":"Torre de Babel","noDecir":["Lenguas","Confusión","Edificio","Cielo"]}, 
+  {"id":35,"palabra":"Salomón","noDecir":["Sabiduría","Templo","Rey","Riquezas"]}, 
+  {"id":36,"palabra":"Templo","noDecir":["Salomón","Adoración","Santo","Jerusalén"]}, 
+  {"id":37,"palabra":"Arca del Pacto","noDecir":["Tablas","Querubines","Santuario","Ley"]}, 
+  {"id":38,"palabra":"Tabernáculo","noDecir":["Desierto","Tienda","Santuario","Dios"]}, 
+  {"id":39,"palabra":"Monte Sinaí","noDecir":["Moisés","Diez Mandamientos","Desierto","Tablas"]}, 
+  {"id":40,"palabra":"Diez Mandamientos","noDecir":["Moisés","Leyes","Sinaí","Piedra"]}, 
+  {"id":41,"palabra":"Sábado","noDecir":["Descanso","Séptimo","Día","Ley"]}, 
+  {"id":42,"palabra":"Pascua","noDecir":["Cordero","Egipto","Primogénito","Nisán"]}, 
+  {"id":43,"palabra":"Cordero de Dios","noDecir":["Jesús","Sacrificio","Pecado","Pascua"]}, 
+  {"id":44,"palabra":"Oveja perdida","noDecir":["Pastor","Parábola","Rebaño","Noventa y nueve"]}, 
+  {"id":45,"palabra":"Buen Pastor","noDecir":["Jesús","Rebaño","Cuidar","Ovejas"]}, 
+  {"id":46,"palabra":"Resurrección","noDecir":["Jesús","Tumba","Sepulcro","Vida"]}, 
+  {"id":47,"palabra":"Biblia","noDecir":["Libro","Palabra de Dios","Escrituras","Revelación"]}, 
+  {"id":48,"palabra":"Jehová","noDecir":["Dios","Nombre","Creador","Padre"]}, 
+  {"id":49,"palabra":"Reino de Dios","noDecir":["Gobierno","Jesús","Cielo","Rey"]}, 
+  {"id":50,"palabra":"Rescate","noDecir":["Jesús","Sacrificio","Pecado","Muerte"]}, 
+  {"id":51,"palabra":"144.000","noDecir":["Cielo","Reino","Jesús","Ungidos"]}, 
+  {"id":52,"palabra":"Nueva Tierra","noDecir":["Paraíso","Promesa","Humanidad","Jehová"]}, 
+  {"id":53,"palabra":"Resurrección","noDecir":["Muertos","Vida","Tumba","Jesús"]}, 
+  {"id":54,"palabra":"Vida eterna","noDecir":["Paraíso","Jehová","Muerte","Futuro"]}, 
+  {"id":55,"palabra":"Satanás","noDecir":["Diablo","Serpiente","Rebelión","Enemigo"]}, 
+  {"id":56,"palabra":"Diablo","noDecir":["Satanás","Tentador","Mentiroso","Ángel"]}, 
+  {"id":57,"palabra":"Perfección","noDecir":["Adán","Jesús","Sin pecado","Paraíso"]}, 
+  {"id":58,"palabra":"Jehová Dios","noDecir":["Creador","Nombre","Todopoderoso","Padre"]}, 
+  {"id":59,"palabra":"Adoración verdadera","noDecir":["Jehová","Biblia","Obediencia","Espíritu"]}, 
+  {"id":60,"palabra":"Oración","noDecir":["Jehová","Hablar","Pedir","Jesús"]}, 
+  {"id":61,"palabra":"Espíritu santo","noDecir":["Jehová","Fuerza","Poder","Bautismo"]}, 
+  {"id":62,"palabra":"Jesucristo","noDecir":["Jesús","Mesías","Hijo","Rey"]}, 
+  {"id":63,"palabra":"Mesías","noDecir":["Cristo","Jesús","Ungido","Rey"]}, 
+  {"id":64,"palabra":"Hijo de Dios","noDecir":["Jesús","Jehová","Primogénito","Cielo"]}, 
+  {"id":65,"palabra":"Últimos días","noDecir":["Profecía","Mundo","Señal","Jesús"]}, 
+  {"id":66,"palabra":"Gran tribulación","noDecir":["Armagedón","Jesús","Fin","Destrucción"]}, 
+  {"id":67,"palabra":"Señal de los últimos días","noDecir":["Guerras","Hambre","Terremotos","Predicación"]}, 
+  {"id":68,"palabra":"Predicación","noDecir":["Buenas noticias","Reino","Testigos","Casas"]}, 
+  {"id":69,"palabra":"Buenas noticias","noDecir":["Reino","Predicar","Jesús","Salvación"]}, 
+  {"id":70,"palabra":"Hacer discípulos","noDecir":["Predicar","Bautizar","Jesús","Enseñar"]}, 
+  {"id":71,"palabra":"Dedicación","noDecir":["Jehová","Oración","Promesa","Bautismo"]}, 
+  {"id":72,"palabra":"Cena del Señor","noDecir":["Jesús","Pan","Vino","Memorial"]}, 
+  {"id":73,"palabra":"Memorial","noDecir":["Jesús","Muerte","Pan","Vino"]}, 
+  {"id":74,"palabra":"Pan sin levadura","noDecir":["Memorial","Jesús","Cena","Pascua"]}, 
+  {"id":75,"palabra":"Vino","noDecir":["Memorial","Jesús","Copa","Sangre"]}, 
+  {"id":76,"palabra":"Sangre de Cristo","noDecir":["Jesús","Rescate","Vida","Sacrificio"]}, 
+  {"id":77,"palabra":"Mandamiento nuevo","noDecir":["Jesús","Amor","Discípulos","Otros"]}, 
+  {"id":78,"palabra":"Amor al prójimo","noDecir":["Jesús","Mandamiento","Ayudar","Otros"]}, 
+  {"id":79,"palabra":"Amor a Jehová","noDecir":["Dios","Corazón","Obedecer","Mandamiento"]}, 
+  {"id":80,"palabra":"Fruto del espíritu","noDecir":["Amor","Gozo","Paz","Espíritu santo"]}, 
+  {"id":81,"palabra":"Paz","noDecir":["Jehová","Espíritu","Tranquilidad","Jesús"]}, 
+  {"id":82,"palabra":"Gozo","noDecir":["Felicidad","Jehová","Espíritu","Predicación"]}, 
+  {"id":83,"palabra":"Fe","noDecir":["Jehová","Creer","Confianza","Obras"]}, 
+  {"id":84,"palabra":"Esperanza","noDecir":["Futuro","Resurrección","Paraíso","Promesa"]}, 
+  {"id":85,"palabra":"Job","noDecir":["Satanás","Prueba","Integridad","Sufrimiento"]}, 
+  {"id":86,"palabra":"Abrahán","noDecir":["Sara","Isaac","Ur","Promesa"]}, 
+  {"id":87,"palabra":"Isaac","noDecir":["Abrahán","Sara","Rebeca","Hijo"]}, 
+  {"id":88,"palabra":"Jacob","noDecir":["Israel","Esaú","Raquel","Doce"]}, 
+  {"id":89,"palabra":"José de Egipto","noDecir":["Jacob","Hermanos","Egipto","Sueños"]}, 
+  {"id":90,"palabra":"Pecado","noDecir":["No alcanzar objetivo","Normas de Jehová","Injusticia","Heredado"]}, 
+  {"id":91,"palabra":"Templo","noDecir":["Edificio","Salomón","Destrucción","Adoración"]},
+  {"id":92,"palabra":"Nabucodonosor.","noDecir":["Profecías.","Locura.","7 tiempos.","Babilonia."]},
+  {"id":93,"palabra":"Timoteo.","noDecir":["Madre cristiana","Estómago.","Discípulo joven.","Compañero fiel."]},
+  {"id":94,"palabra":"Burra de Balaam.","noDecir":["Burra.","Habla.","Animal.","Balac."]},
+  {"id":95,"palabra":"Mar Rojo.","noDecir":["Mar.","Rojo.","Moisés.",""]},
+  {"id":96,"palabra":"Zarza ardiente.","noDecir":["Moisés.","Egipto.","vara.","Fuego."]},
+  {"id":97,"palabra":"Muerte.","noDecir":["Pecado.","Funeral.","Adán y Eva.","Consecuencia"]},
+  {"id":98,"palabra":"Tabernáculo.","noDecir":["Tienda portátil.","Arca del Pacto.","Adoración.","Sacrificios."]},
+  {"id":99,"palabra":"Paraíso espiritual.","noDecir":["Paz.","Unidad.","Organización.","Presente y futuro."]},
+  {"id":100,"palabra":"Nazareno.","noDecir":["Cabello.","Cadáver.","Alcohol.","Sansón."]},
+  {"id":101,"palabra":"10 plagas.","noDecir":["Plagas.","10.","Moisés.","Egipto."]},
+  {"id":102,"palabra":"Sulamita.","noDecir":["Humildad.","Campesina.","Morena.","Pastor."]},
+  {"id":103,"palabra":"Jael.","noDecir":["Estaca.","Barac.","Sisara.","Sien/Cerebro."]},
+  {"id":104,"palabra":"Arcoíris.","noDecir":["Noé.","Promesa.","Diluvio.","Cielo."]},
+  {"id":105,"palabra":"Lidia.","noDecir":["Púrpura.","Pablo.","Hospitalidad.","Judía."]},
+  {"id":106,"palabra":"Conmemoración.","noDecir":["Anual.","Sacrificio.","Jesús.","Vino."]},
+  {"id":107,"palabra":"Fe.","noDecir":["Convicción.","Expectativa.","Esperanza.","Demostración evidente."]},
+  {"id":108,"palabra":"Profecía.","noDecir":["Visión.","Revelación.","Sentencia.","Suceso futuro."]},
+  {"id":109,"palabra":"Mejores maestros.","noDecir":["Practicar","Mejorar.","Enseñanza.","Asignaciones."]},
+  {"id":110,"palabra":"Esposa de Potifar.","noDecir":["Esposa.","Potifar.","Egipto.","José."]},
+  {"id":111,"palabra":"Envidia.","noDecir":["Desear lo ajeno.","Egoísmo.","Descontento.","Celo."]},
+  {"id":112,"palabra":"Sermón del monte.","noDecir":["Jesús.","Discurso.","Regla de oro.","Multitudes."]},
+  {"id":113,"palabra":"Paraíso.","noDecir":["Profecía.","Jardín.","Promesa de Jehová.","Feliz."]},
+  {"id":114,"palabra":"Pedro.","noDecir":["Apóstol","Impulsivo.","Simón.","Humilde."]},
+  {"id":115,"palabra":"Ancianos.","noDecir":["Pastores.","Ovejas.","Cuidado.","Congregación."]},
+  {"id":116,"palabra":"Arca.","noDecir":["Noé.","Diluvio.","8 personas.","Arcoíris."]},
+  {"id":117,"palabra":"Materialismo.","noDecir":["Dinero.","Posesiones.","Comprar.","Riquezas."]},
+  {"id":118,"palabra":"Ciudad de refugio.","noDecir":["Homicida.","Vengador sangre.","Refugiarse","Sumo sacerdote."]},
+  {"id":119,"palabra":"Eliseo.","noDecir":["Elijah.","Naaman.","Guehazi.","Calvo."]},
+  {"id":120,"palabra":"Rebeca.","noDecir":["Isaac.","Viaje.","Pozo.","Jarro."]},
+  {"id":121,"palabra":"Manasés.","noDecir":["Rey.","Arrepiente","Perdón.","Se humilló."]},
+  {"id":122,"palabra":"Apóstol Juan.","noDecir":["Apocalipsis.","Evangelios.","Patmos.","Discípulo amado de Jesús."]},
+  {"id":123,"palabra":"Disciplina.","noDecir":["Padres.","Hijos.","Biblia.","Desobediencia."]},
+  {"id":124,"palabra":"Pectoral del sumo sacerdote.","noDecir":["Piedras preciosas.","Pecho.","Santo.","12 piedras."]},
+  {"id":125,"palabra":"Jesabel.","noDecir":["Reina.","Baal.","Nabot.","Perros comieron su carne."]},
+  {"id":126,"palabra":"Gomer.","noDecir":["Oseas.","Adulterio.","Inmoralidad.","Perdón."]},
+  {"id":127,"palabra":"Job","noDecir":["Integridad.","Riquezas.","Justo.","Úlceras."]},
+  {"id":128,"palabra":"Abigail.","noDecir":["Naval.","Sensatez.","Matanza.","David."]},
+  {"id":129,"palabra":"Nefilim.","noDecir":["Gigante.","Ángel.","Noe.","Violencia."]},
+  {"id":130,"palabra":"Armagedon.","noDecir":["Guerra.","Gog de la tierra de Magog.","Día de Jehová.","Destrucción."]},
+  {"id":131,"palabra":"Éutico.","noDecir":["Ventana.","Discurso.","Dormir.","Pablo"]},
+  {"id":132,"palabra":"Dina.","noDecir":["Siquem.","Jacob.","Violación.","Malas compañías."]},
+  {"id":133,"palabra":"Jonas.","noDecir":["Bote.","Ninive.","Pez.","Vientre."]},
+  {"id":134,"palabra":"Nemrod","noDecir":["Enemigo.","Idiomas.","Cazador.","Torre de Babel."]}, 
+  {"id":135,"palabra":"Humildad.","noDecir":["Orgullo.","Jehová.","Arrogancia.","Manso."]},
+  {"id":136,"palabra":"Satanás.","noDecir":["Serpiente.","Calumniador.","Diablo.","Inicuo."]},
+  {"id":137,"palabra":"Rahab.","noDecir":["Espias.","Prostituta.","Jerico.","Cordon Rojo."]},
+  {"id":138,"palabra":"Serpiente de cobre","noDecir":["Moisés","Serpiente","Leccion.","Desierto"]},
+  {"id":139,"palabra":"Rey Asuero.","noDecir":["Esther.","Mardoqueo.","Susa.","Haman."]}
+]
+
+</script>
+
+
+<script>
+
+var cartas = [],
+    cartaActual = null,
+    usadas = [],
+    puntaje = 0,
+    estado = 'oculta',
+    girando = false,
+    bloqueo = false;
+
+
+var escenaBase =
+    document.getElementById('escenaBase');
+
+var escenaJuego =
+    document.getElementById('escenaJuego');
+
+var cartaBase =
+    document.getElementById('cartaBase');
+
+var cartaEl =
+    document.getElementById('carta');
+
+var numEl =
+    document.getElementById('numeroCarta');
+
+var palabraEl =
+    document.getElementById('palabra');
+
+var palabrasEl =
+    [1,2,3,4].map(function(n) {
+      return document.getElementById('palabra' + n);
+    });
+
+
+function mostrarEscena(nombre) {
+
+  escenaBase.classList.toggle(
+    'activa',
+    nombre === 'base'
+  );
+
+  escenaJuego.classList.toggle(
+    'activa',
+    nombre === 'juego'
+  );
+
+}
+
+
+function cartaAleatoria() {
+
+  var disp = cartas.filter(function(c) {
+
+    return usadas.indexOf(c.id) === -1;
+
+  });
+
+  if (disp.length === 0) {
+
+    usadas = [];
+
+    disp = cartas.slice();
+
+  }
+
+  return disp[
+    Math.floor(
+      Math.random() * disp.length
+    )
+  ];
+
+}
+
+
+function mostrarCarta(c) {
+
+  cartaActual = c;
+
+  numEl.textContent =
+    'Carta #' + c.id;
+
+  palabraEl.textContent =
+    c.palabra;
+
+  for (var i = 0; i < 4; i++) {
+
+    palabrasEl[i].textContent =
+      c.noDecir[i];
+
+  }
+
+}
+
+
+function actualizarPuntaje() {
+
+  document.getElementById(
+    'ronda'
+  ).textContent = usadas.length;
+
+  document.getElementById(
+    'total'
+  ).textContent = cartas.length;
+
+}
+
+
+function girar(grados) {
+
+  cartaEl.style.transform =
+    'rotateY(' + grados + 'deg)';
+
+}
+
+
+function dejarEnBlanco() {
+
+  puntaje++;
+
+  usadas.push(
+    cartaActual.id
+  );
+
+  actualizarPuntaje();
+
+  girar(180);
+
+  girando = true;
+
+  setTimeout(function() {
+
+    girando = false;
+
+    estado = 'blanca';
+
+  }, 750);
+
+}
+
+
+function traerNueva() {
+
+  mostrarCarta(
+    cartaAleatoria()
+  );
+
+  girar(360);
+
+  girando = true;
+
+  setTimeout(function() {
+
+    girando = false;
+
+    estado = 'llena';
+
+    cartaEl.style.transition =
+      'none';
+
+    cartaEl.style.transform =
+      'rotateY(0deg)';
+
+    void cartaEl.offsetWidth;
+
+    cartaEl.style.transition =
+      '';
+
+  }, 750);
+
+}
+
+
+function revelar() {
+
+  girar(360);
+
+  girando = true;
+
+  setTimeout(function() {
+
+    girando = false;
+
+    estado = 'llena';
+
+  }, 750);
+
+}
+
+
+cartaEl.addEventListener(
+  'click',
+  function() {
+
+    if (girando) return;
+
+    if (estado === 'oculta') {
+
+      revelar();
+
+    } else if (estado === 'llena') {
+
+      dejarEnBlanco();
+
+    } else {
+
+      traerNueva();
+
+    }
+
+  }
+);
+
+
+function iniciarPartida() {
+
+  usadas = [];
+
+  puntaje = 0;
+
+  girando = false;
+
+  estado = 'oculta';
+
+  cartaEl.style.transition =
+    'none';
+
+  cartaEl.style.transform =
+    'rotateY(180deg)';
+
+  void cartaEl.offsetWidth;
+
+  cartaEl.style.transition =
+    '';
+
+  if (cartas.length > 0) {
+
+    mostrarCarta(
+      cartaAleatoria()
+    );
+
+    actualizarPuntaje();
+
+  }
+
+}
+
+
+function cargarCartas() {
+
+  return fetch('cartas.json')
+
+    .then(function(r) {
+
+      if (!r.ok)
+        throw new Error(
+          'HTTP ' + r.status
+        );
+
+      return r.json();
+
+    })
+
+    .then(function(datos) {
+
+      cartas = datos;
+
+    })
+
+    .catch(function(err) {
+
+      console.warn(
+        'No se pudo leer cartas.json. Usando el respaldo incluido.',
+        err
+      );
+
+      try {
+
+        cartas =
+          JSON.parse(
+            document.getElementById(
+              'datos-respaldo'
+            ).textContent
+          );
+
+      } catch (e2) {
+
+        cartas = [];
+
+      }
+
+    });
+
+}
+
+
+/* Entrada al juego desde la carta inicial */
+
+cartaBase.addEventListener(
+  'click',
+  function() {
+
+    if (bloqueo) return;
+
+    bloqueo = true;
+
+    cartaBase.classList.add(
+      'salida'
+    );
+
+    setTimeout(function() {
+
+      cartaBase.classList.remove(
+        'salida'
+      );
+
+      mostrarEscena(
+        'juego'
+      );
+
+      cargarCartas().then(
+        function() {
+
+          iniciarPartida();
+
+        }
+      );
+
+      bloqueo = false;
+
+    }, 300);
+
+  }
+);
+
+
+document.getElementById(
+  'btnReset'
+).addEventListener(
+  'click',
+  function() {
+
+    iniciarPartida();
+
+  }
+);
+
+
+document.getElementById(
+  'btnInicio'
+).addEventListener(
+  'click',
+  function() {
+
+    iniciarPartida();
+
+    mostrarEscena(
+      'base'
+    );
+
+  }
+);
+
+</script>
+
+</body>
+</html>
